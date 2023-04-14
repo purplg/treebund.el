@@ -98,7 +98,7 @@ are used for all tests."
 
 
 ;;; Tests:
-(treebund-deftest treebund-test--setup
+(treebund-deftest treebund--setup
   (("origin-one" . ())
    ("origin-two" . ("branch-one"))
    ("origin-three" . ("branch-one" "branch-two")))
@@ -121,7 +121,7 @@ are used for all tests."
     (should (member "branch-one" (treebund--branches origin)))
     (should (member "branch-two" (treebund--branches origin)))))
 
-(treebund-deftest treebund-test--branches
+(treebund-deftest treebund--branches
   (("remote" . ("feature/test" "other-branch"))
    ("empty-remote" . ()))
   (let* ((workspace-path (expand-file-name "test" treebund-workspace-root))
@@ -144,7 +144,7 @@ are used for all tests."
          (bare-path (treebund--clone remote)))
     (should (length= (treebund--branches bare-path) 0))))
 
-(treebund-deftest treebund-test--worktree-bare
+(treebund-deftest treebund--worktree-bare
   (("remote" . ("feature/test" "other-branch")))
   (let* ((workspace-path (expand-file-name "test" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
