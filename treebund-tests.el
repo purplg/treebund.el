@@ -121,23 +121,35 @@ are used for all tests."
     (should (member "branch-two" (treebund--branches origin)))))
 
 (treebund-deftest treebund-test--branches
-  '(("empty-remote" . ())
-    ("remote" . ("feature/test" "other-branch")))
+  '(("remote" . ("feature/test" "other-branch"))
+    ("empty-remote" . ()))
   (let* ((workspace-path (expand-file-name "test" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
+
+    ; Check bare repository branches
     (should (length= (treebund--branches bare-path) 2))
     (should (member "feature/test" (treebund--branches remote)))
     (should (member "other-branch" (treebund--branches remote)))
 
+    ; Check worktree branches
     (let ((project-path (treebund--project-add workspace-path bare-path)))
       (should (length= (treebund--branches project-path) 2))
       (should (member "feature/test" (treebund--branches project-path)))
       (should (member "other-branch" (treebund--branches project-path)))))
 
+  ; Ensure nil is returned when no branches exist.
   (let* ((remote (expand-file-name "empty-remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
     (should (length= (treebund--branches bare-path) 0))))
+
+(treebund-deftest treebund-test--worktree-bare
+  '(("remote" . ("feature/test" "other-branch")))
+  (let* ((workspace-path (expand-file-name "test" treebund-workspace-root))
+         (remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote))
+         (project-path (treebund--project-add workspace-path bare-path)))
+    (should (string= bare-path (treebund--worktree-bare project-path)))))
 
 (provide 'treebund-tests)
 ;;; treebund-tests.el ends here
