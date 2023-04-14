@@ -145,7 +145,7 @@ are used for all tests."
     (should (length= (treebund--branches bare-path) 0))))
 
 (treebund-deftest treebund--worktree-bare
-  (("remote" . ("feature/test" "other-branch")))
+  (("remote" . ("feature/test")))
   (let* ((workspace-path (expand-file-name "test" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote))
