@@ -85,7 +85,8 @@ Each created branch will have 2 commits."
 (defmacro treebund-deftest (name remotes &rest body)
   "Wrapper around `ert-deftest' to ensure correct tmp directories
 are used for all tests."
-  (declare (indent defun))
+  (declare (indent defun)
+           (doc-string 3))
   `(ert-deftest ,name ()
      ,(when (stringp (car body))
         (pop body))
