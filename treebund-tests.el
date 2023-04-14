@@ -154,5 +154,78 @@ are used for all tests."
          (project-path (treebund--project-add workspace-path bare-path)))
     (should (string= bare-path (treebund--worktree-bare project-path)))))
 
+(treebund-deftest treebund--worktree-remove
+  (("remote" . ("test/worktree-remove")))
+  (let* ((workspace-path (expand-file-name "worktree-remove" treebund-workspace-root))
+         (remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote))
+         (project-path (treebund--project-add workspace-path bare-path)))
+    (treebund--worktree-remove project-path)
+    (should-not (file-exists-p project-path))))
+
+(treebund-deftest treebund--worktree-add
+  (("remote" . ("test/worktree-add")))
+  (let* ((workspace-path (expand-file-name "worktree-add" treebund-workspace-root))
+         (remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote))
+         (project-path (treebund--project-add workspace-path bare-path)))
+    (should (file-exists-p project-path))
+    (should (file-directory-p project-path))))
+
+(treebund-deftest treebund--branch
+  (("remote" . ("test/branch")))
+  (let* ((workspace-path (expand-file-name "branch" treebund-workspace-root))
+         (remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote))
+         (project-path (treebund--project-add workspace-path bare-path)))
+    (should (string= "test/branch" (treebund--branch project-path)))))
+
+(treebund-deftest treebund--branch-delete
+  (("remote" . ("master" "branch-one" "branch-two")))
+  (let* ((workspace-path (expand-file-name "branch-delete" treebund-workspace-root))
+         (remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote))
+         (project-path (treebund--project-add workspace-path bare-path)))
+    (should (length= (treebund--branches bare-path) 4))
+    (treebund--branch-delete bare-path "branch-one")
+    (should (length= (treebund--branches bare-path) 3))
+    (treebund--branch-delete project-path "branch-two")
+    (should (length= (treebund--branches bare-path) 2))))
+
+(treebund-deftest treebund--clone
+  (("remote" . ("master" "other-branch")))
+  (let* ((workspace-path (expand-file-name "branch-delete" treebund-workspace-root))
+         (remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote)))
+    (should (file-exists-p bare-path))
+    (should (file-directory-p bare-path))
+    (should (length= (treebund--branches bare-path) 2))
+    (should (member "master" (treebund--branches bare-path)))
+    (should (member "other-branch" (treebund--branches bare-path)))))
+
+(treebund-deftest treebund--list-worktrees
+  (("remote" . ("master" "other-branch")))
+  (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote)))
+    (should (length= (treebund--list-worktrees bare-path) 1))
+    (should (member "bare" (car (treebund--list-worktrees bare-path))))
+
+    (let ((worktree (treebund--project-add
+                         (expand-file-name "list-worktrees-one" treebund-workspace-root)
+                         bare-path)))
+      (should (length= (treebund--list-worktrees worktree) 2))
+      (should-not (member "bare" (cadr (treebund--list-worktrees bare-path)))))
+
+    (let ((worktree (treebund--project-add
+                         (expand-file-name "list-worktrees-two" treebund-workspace-root)
+                         bare-path)))
+      (should (length= (treebund--list-worktrees worktree) 3)))))
+
+(treebund-deftest treebund--rev-count
+  (("remote" . ("master" "other-branch")))
+  (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote)))
+    (should (= (treebund--rev-count bare-path "other-branch") 3))))
+
 (provide 'treebund-tests)
 ;;; treebund-tests.el ends here
