@@ -93,15 +93,15 @@ are used for all tests."
      (let* ((treebund-workspace-root (file-name-concat treebund-test--dir "workspaces"))
             (treebund-bare-dir (file-name-concat treebund-workspace-root ".bare"))
             (treebund-project-open-function (lambda (&rest _))))
-       (treebund-test--setup ,remotes)
+       (treebund-test--setup ',remotes)
        ,@body)))
 
 
 ;;; Tests:
 (treebund-deftest treebund-test--setup
-  '(("origin-one" . ())
-    ("origin-two" . ("branch-one"))
-    ("origin-three" . ("branch-one" "branch-two")))
+  (("origin-one" . ())
+   ("origin-two" . ("branch-one"))
+   ("origin-three" . ("branch-one" "branch-two")))
   "The basic testing environment used for all treebund tests."
   (let ((origin (expand-file-name "origin-one.git" treebund-remote--dir)))
     (should (and (file-exists-p origin)
@@ -122,8 +122,8 @@ are used for all tests."
     (should (member "branch-two" (treebund--branches origin)))))
 
 (treebund-deftest treebund-test--branches
-  '(("remote" . ("feature/test" "other-branch"))
-    ("empty-remote" . ()))
+  (("remote" . ("feature/test" "other-branch"))
+   ("empty-remote" . ()))
   (let* ((workspace-path (expand-file-name "test" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
@@ -145,7 +145,7 @@ are used for all tests."
     (should (length= (treebund--branches bare-path) 0))))
 
 (treebund-deftest treebund-test--worktree-bare
-  '(("remote" . ("feature/test" "other-branch")))
+  (("remote" . ("feature/test" "other-branch")))
   (let* ((workspace-path (expand-file-name "test" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote))
