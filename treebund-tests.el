@@ -222,5 +222,78 @@ are used for all tests."
          (bare-path (treebund--clone remote)))
     (should (= (treebund--rev-count bare-path "other-branch") 3))))
 
+(treebund-deftest treebund--repo-worktree-count
+  (("remote" . ("master")))
+  (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote)))
+    (should (= (treebund--repo-worktree-count bare-path) 0))
+    (let ((worktree (treebund--project-add (expand-file-name "repo-worktree-count-one"
+                                                             treebund-workspace-root)
+                                           bare-path)))
+      (should (= (treebund--repo-worktree-count bare-path) 1)))
+
+    (let ((worktree (treebund--project-add (expand-file-name "repo-worktree-count-two"
+                                                             treebund-workspace-root)
+                                           bare-path)))
+      (should (= (treebund--repo-worktree-count bare-path) 2)))))
+
+(treebund-deftest treebund--has-worktrees-p
+  (("remote" . ("master")))
+  (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote)))
+    (should-not (treebund--has-worktrees-p bare-path))
+    (treebund--project-add (expand-file-name "repo-worktree-count-one"
+                                             treebund-workspace-root)
+                           bare-path)
+    (should (treebund--has-worktrees-p bare-path))))
+
+;; (treebund-deftest treebund--unpushed-commits-p
+;;   (("remote" . ("master" "other-branch")))
+;;   (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
+;;          (bare-path (treebund--clone remote))
+;;          (project-path (treebund--project-add (expand-file-name "unpushed-commits-p"
+;;                                                                 treebund-workspace-root)
+;;                                               bare-path
+;;                                               "master")))
+;;     (should-not (treebund--unpushed-commits-p project-path))
+;;     (let ((test-file (expand-file-name "unpushed" project-path)))
+;;       (with-temp-buffer
+;;         (write-file test-file))
+;;       (treebund--git-with-repo project-path
+;;         "add" test-file)
+;;       (treebund--git-with-repo project-path
+;;         "commit" "-m" "unpushed-commit")
+;;       (should (treebund--unpushed-commits-p project-path))
+;;       (treebund--git-with-repo project-path "push" "--set-upstream" "origin" "test/unpushed-commits-p")
+;;       (should-not (treebund--unpushed-commits-p project-path)))))
+
+(treebund-deftest treebund--bare-name
+  (("remote" . ("master")))
+  (let* ((workspace-path (expand-file-name "bare-name" treebund-workspace-root))
+         (remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote))
+         (project-path (treebund--project-add workspace-path bare-path)))
+    (should (string= "remote" (treebund--bare-name bare-path)))
+    (should (string= "remote" (treebund--bare-name project-path)))))
+
+(treebund-deftest treebund--bare-delete
+  (("remote" . ("master")))
+  (let* ((workspace-path (expand-file-name "bare-name" treebund-workspace-root))
+         (remote (expand-file-name "remote.git" treebund-remote--dir))
+         (bare-path (treebund--clone remote)))
+    (should (file-directory-p bare-path))
+    (treebund-delete-bare bare-path)
+    (should-not (file-exists-p bare-path))
+    (treebund--git "clone" remote "--bare" "/tmp/treebund-tests/not-workspaces/something.git")
+    (should (string= "Bare not within workspace root"
+                     (cadr (should-error
+                            (treebund-delete-bare "/tmp/treebund-tests/not-workspaces/something.git")
+                            :type 'treebund-error))))
+    (treebund--git "clone" remote "--bare" "/tmp/treebund-tests/workspaces/something")
+    (should (string= "Bare repository does not end in .git"
+                     (cadr (should-error
+                            (treebund-delete-bare "/tmp/treebund-tests/workspaces/something")
+                            :type 'treebund-error))))))
+
 (provide 'treebund-tests)
 ;;; treebund-tests.el ends here
