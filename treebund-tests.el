@@ -106,19 +106,16 @@ are used for all tests."
    ("origin-three" . ("branch-one" "branch-two")))
   "The basic testing environment used for all treebund tests."
   (let ((origin (expand-file-name "origin-one.git" treebund-remote--dir)))
-    (should (and (file-exists-p origin)
-                 (file-directory-p origin)))
+    (should (file-directory-p origin))
     (should-not (treebund--branches origin)))
 
   (let ((origin (expand-file-name "origin-two.git" treebund-remote--dir)))
-    (should (and (file-exists-p origin)
-                 (file-directory-p origin)))
+    (should (file-directory-p origin))
     (should (length= (treebund--branches origin) 1))
     (should (member "branch-one" (treebund--branches origin))))
 
   (let ((origin (expand-file-name "origin-three.git" treebund-remote--dir)))
-    (should (and (file-exists-p origin)
-                 (file-directory-p origin)))
+    (should (file-directory-p origin))
     (should (length= (treebund--branches origin) 2))
     (should (member "branch-one" (treebund--branches origin)))
     (should (member "branch-two" (treebund--branches origin)))))
@@ -169,7 +166,6 @@ are used for all tests."
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote))
          (project-path (treebund--project-add workspace-path bare-path)))
-    (should (file-exists-p project-path))
     (should (file-directory-p project-path))))
 
 (treebund-deftest treebund--branch
@@ -197,7 +193,6 @@ are used for all tests."
   (let* ((workspace-path (expand-file-name "branch-delete" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
-    (should (file-exists-p bare-path))
     (should (file-directory-p bare-path))
     (should (length= (treebund--branches bare-path) 2))
     (should (member "master" (treebund--branches bare-path)))
