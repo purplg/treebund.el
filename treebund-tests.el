@@ -203,23 +203,23 @@ are used for all tests."
     (should (member "master" (treebund--branches bare-path)))
     (should (member "other-branch" (treebund--branches bare-path)))))
 
-(treebund-deftest treebund--list-worktrees
-  (("remote" . ("master" "other-branch")))
+(treebund-deftest treebund--worktree-list
+  (("remote" . ("master")))
   (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
-    (should (length= (treebund--list-worktrees bare-path) 1))
-    (should (member "bare" (car (treebund--list-worktrees bare-path))))
+    (should (length= (treebund--worktree-list bare-path) 1))
+    (should (member "bare" (car (treebund--worktree-list bare-path))))
 
     (let ((worktree (treebund--project-add
-                         (expand-file-name "list-worktrees-one" treebund-workspace-root)
+                         (expand-file-name "worktree-list-one" treebund-workspace-root)
                          bare-path)))
-      (should (length= (treebund--list-worktrees worktree) 2))
-      (should-not (member "bare" (cadr (treebund--list-worktrees bare-path)))))
+      (should (length= (treebund--worktree-list worktree) 2))
+      (should-not (member "bare" (cadr (treebund--worktree-list bare-path)))))
 
     (let ((worktree (treebund--project-add
-                         (expand-file-name "list-worktrees-two" treebund-workspace-root)
+                         (expand-file-name "worktree-list-two" treebund-workspace-root)
                          bare-path)))
-      (should (length= (treebund--list-worktrees worktree) 3)))))
+      (should (length= (treebund--worktree-list worktree) 3)))))
 
 (treebund-deftest treebund--rev-count
   (("remote" . ("master" "other-branch")))
