@@ -12,7 +12,7 @@
 ;;; Logging:
 (setq ert-quiet nil)
 
-(setq treebund-test-logging nil)
+(setq-default treebund-test-logging nil)
 
 (when treebund-test-logging
   (defun treebund--gitlog (type &rest msg)
