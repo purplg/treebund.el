@@ -283,52 +283,71 @@ are used for all tests."
                            bare-path)
     (should (treebund--has-worktrees-p bare-path))))
 
-;; (treebund-deftest treebund--unpushed-commits-p
-;;   (("remote" . ("master" "other-branch")))
-;;   (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
-;;          (bare-path (treebund--clone remote))
-;;          (project-path (treebund--project-add (expand-file-name "unpushed-commits-p"
-;;                                                                 treebund-workspace-root)
-;;                                               bare-path
-;;                                               "master")))
-;;     (should-not (treebund--unpushed-commits-p project-path))
-;;     (let ((test-file (expand-file-name "unpushed" project-path)))
-;;       (with-temp-buffer
-;;         (write-file test-file))
-;;       (treebund--git-with-repo project-path
-;;         "add" test-file)
-;;       (treebund--git-with-repo project-path
-;;         "commit" "-m" "unpushed-commit")
-;;       (should (treebund--unpushed-commits-p project-path))
-;;       (treebund--git-with-repo project-path "push" "--set-upstream" "origin" "test/unpushed-commits-p")
-;;       (should-not (treebund--unpushed-commits-p project-path)))))
+(treebund-deftest treebund--unpushed-commits-p
+  ( :remotes (("origin" . ("master" "other-branch")))
+    :projects (("some-feature/master" . ("origin/master"))
+               ("some-feature/other" . ("origin/other"))))
+  (let ((master-path (file-name-concat treebund-workspace-root "some-feature/master"))
+        (other-path (file-name-concat treebund-workspace-root "some-feature/other")))
+    ;; A freshly clone repository should not be dirty.
+    (should-not (treebund--unpushed-commits-p master-path))
+
+    ;; Create and commit an empty file
+    (let ((test-file (file-name-concat master-path "unpushed")))
+      (with-temp-buffer (write-file test-file))
+      (treebund--git-with-repo master-path "add" test-file)
+      (treebund--git-with-repo master-path "commit" "-m" "unpushed-commit"))
+
+    ;; Since we have an unpushed commit, this should pass now.
+    (should (treebund--unpushed-commits-p master-path))
+
+    ;; Other project should also reflect unpushed commits
+    (should (treebund--unpushed-commits-p other-path))
+
+    ;; Push and it should now pass.
+    (treebund--git-with-repo master-path "push" "--set-upstream" "origin" "master")
+    (should-not (treebund--unpushed-commits-p master-path))))
 
 (treebund-deftest treebund--bare-name
-  (:remotes (("remote" . ("master"))))
-  (let* ((workspace-path (expand-file-name "bare-name" treebund-workspace-root))
-         (remote (expand-file-name "remote.git" treebund-remote--dir))
-         (bare-path (treebund--clone remote))
-         (project-path (treebund--project-add workspace-path bare-path)))
-    (should (string= "remote" (treebund--bare-name bare-path)))
-    (should (string= "remote" (treebund--bare-name project-path)))))
+  ( :remotes (("origin" . ("master")))
+    :projects (("some-feature/feature" "origin/master")))
+  (let* ((remote-path (file-name-concat treebund-remote--dir "origin.git"))
+         (bare-path (file-name-concat treebund-bare-dir "origin.git"))
+         (project-path (file-name-concat treebund-workspace-root "some-feature/feature")))
+    (should (string= "origin" (treebund--bare-name bare-path)))
+    (should (string= "origin" (treebund--bare-name project-path)))))
 
-(treebund-deftest treebund--bare-delete
-  (:remotes (("remote" . ("master"))))
-  (let* ((workspace-path (expand-file-name "bare-name" treebund-workspace-root))
-         (remote (expand-file-name "remote.git" treebund-remote--dir))
-         (bare-path (treebund--clone remote)))
-    (should (file-directory-p bare-path))
-    (treebund-delete-bare bare-path)
-    (should-not (file-exists-p bare-path))
-    (treebund--git "clone" remote "--bare" "/tmp/treebund-tests/not-workspaces/something.git")
+(treebund-deftest treebund--do-not-delete-with-worktrees
+  ( :remotes (("remote" . ("master")))
+    :projects (("some-feature/some-branch" "remote/master")))
+  (should (string= "This repository has worktrees checked out"
+                   (cadr (should-error
+                          (treebund-delete-bare (file-name-concat treebund-bare-dir "remote.git"))
+                          :type 'treebund-error)))))
+
+(treebund-deftest treebund--do-not-delete-with-unpushed-changes
+  ( :remotes (("remote" . ("master")))
+    :projects (("some-feature/some-branch" "remote/master")))
+  (let* ((bare-path (file-name-concat treebund-bare-dir "remote.git"))
+         (project-path (file-name-concat treebund-workspace-root "some-feature/some-branch")))
+    ;; Create and commit an empty file
+    (let ((test-file (file-name-concat project-path "unpushed")))
+      (with-temp-buffer (write-file test-file))
+      (treebund--git-with-repo project-path "add" test-file)
+      (treebund--git-with-repo project-path "commit" "-m" "unpushed-commit"))
+    (treebund-remove-project project-path)
+    (should (string= (format "%s has unpushed commits on some branches." (treebund--bare-name bare-path))
+                     (cadr (should-error
+                            (treebund-delete-bare bare-path)
+                            :type 'treebund-error))))))
+
+(treebund-deftest treebund--do-not-delete-outside-workspace-root ()
+  (let ((project-path (file-name-concat treebund-test--dir "test-project.git")))
+    (make-directory project-path t)
+    (treebund--git-with-repo project-path "init" "--bare")
     (should (string= "Bare not within workspace root"
                      (cadr (should-error
-                            (treebund-delete-bare "/tmp/treebund-tests/not-workspaces/something.git")
-                            :type 'treebund-error))))
-    (treebund--git "clone" remote "--bare" "/tmp/treebund-tests/workspaces/something")
-    (should (string= "Bare repository does not end in .git"
-                     (cadr (should-error
-                            (treebund-delete-bare "/tmp/treebund-tests/workspaces/something")
+                            (treebund-delete-bare project-path)
                             :type 'treebund-error))))))
 
 (treebund-deftest treebund-current-workspace
@@ -338,8 +357,10 @@ are used for all tests."
   (with-temp-buffer
     (let ((buffer-file-name (expand-file-name "../" treebund-workspace-root)))
       (should-not (treebund-current-workspace)))
+
     (let ((buffer-file-name treebund-workspace-root))
       (should-not (treebund-current-workspace)))
+
     (let ((buffer-file-name (file-name-concat treebund-workspace-root "some-workspace")))
       (should (string= (file-name-concat treebund-test--dir "workspaces/some-workspace/")
                        (treebund-current-workspace))))
