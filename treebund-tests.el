@@ -32,7 +32,7 @@
 
 ;;; Environment:
 (setq treebund-test--dir (expand-file-name "treebund-tests" temporary-file-directory))
-(setq treebund-remote--dir (file-name-concat treebund-test--dir "remote"))
+(setq treebund-remote--dir (file-name-concat treebund-test--dir "simulated-remote"))
 
 (defun treebund-test--setup-branch (name origin-path &optional num-commits)
   (let ((worktree-path (expand-file-name name treebund-remote--dir)))
@@ -63,26 +63,48 @@ remote. Each branch will have 2 commits added."
       (treebund-test--setup-branch branch origin-path 3))
     (make-directory treebund-bare-dir t)))
 
-(defun treebund-test--setup (remotes)
+(defun treebund-test--setup-project (worktree-path remote-name branch)
+  "Setup simulated remote.
+NAME is the name of the remote repository.
+
+BRANCHES is a list of branch names to be created in this
+remote. Each branch will have 2 commits added."
+  ;; Clone the repo if it hasn't been cloned from simulated-remote yet
+  (let ((bare-path (file-name-concat treebund-bare-dir (concat remote-name ".git")))
+        (worktree-path (file-name-concat treebund-workspace-root worktree-path)))
+    (make-directory worktree-path t)
+    (unless (file-exists-p bare-path)
+      (treebund--clone (file-name-concat treebund-remote--dir (concat remote-name ".git"))))
+    (treebund--worktree-add bare-path worktree-path branch)))
+
+(defun treebund-test--setup (remotes projects)
   "Setup testing environment.
 REMOTES is a list of cons cells of remote names to a list of
 branch names. For example:
 
-\\='((\"origin-one\" . (\"branch-one\" \"branch-two\")) 
-  (\"origin-two\" . (\"branch-one\")))
+\\=(:remotes ((\"origin-one\" . (\"branch-one\" \"branch-two\"))
+           (\"origin-two\" . (\"branch-one\")))
+ :projects ((\"workspace/project-one-path\" \"origin-one\" \"branch-one\"))
+            (\"workspace/project-two-path\" \"origin-one\" \"branch-two\")))
 
 Each created branch will have 2 commits."
-  ; Create temp directory.
+  ;; Create temp directory.
   (when (file-directory-p treebund-test--dir)
     (delete-directory treebund-test--dir t))
   (make-directory treebund-test--dir)
   (make-directory treebund-workspace-root)
   (make-directory treebund-remote--dir)
 
-  (dolist (remote remotes)
-    (treebund-test--setup-remote (car remote) (cdr remote))))
+  (while-let ((remote (pop remotes)))
+    (treebund-test--setup-remote (car remote)
+                                 (cdr remote)))
 
-(defmacro treebund-deftest (name remotes &rest body)
+  (while-let ((project (pop projects)))
+    (let* ((worktree-path (pop project))
+           (remote-branch (string-split (pop project) "/")))
+      (treebund-test--setup-project worktree-path (pop remote-branch) (pop remote-branch)))))
+
+(defmacro treebund-deftest (name test-args &rest body)
   "Wrapper around `ert-deftest' to ensure correct tmp directories
 are used for all tests."
   (declare (indent defun)
@@ -90,39 +112,53 @@ are used for all tests."
   `(ert-deftest ,name ()
      ,(when (stringp (car body))
         (pop body))
-     (let* ((inhibit-message t)
+     (let* ((inhibit-message nil)
             (treebund-workspace-root (file-name-concat treebund-test--dir "workspaces"))
             (treebund-bare-dir (file-name-concat treebund-workspace-root ".bare"))
             (treebund-project-open-function (lambda (&rest _)))
             (treebund-prefix "test/"))
-       (treebund-test--setup ',remotes)
+       (treebund-test--setup
+        (plist-get ',test-args ':remotes)
+        (plist-get ',test-args ':projects))
        ,@body)))
 
 
 ;;; Tests:
 (treebund-deftest treebund--setup
-  (("origin-one" . ())
-   ("origin-two" . ("branch-one"))
-   ("origin-three" . ("branch-one" "branch-two")))
+  ( :remotes (("remote-one" . ())
+              ("remote-two" . ("branch-one"))
+              ("remote-three" . ("branch-one" "branch-two")))
+    :projects (("some-workspace/project-two-one" "remote-two/branch-one")
+               ("some-workspace/project-three-one" "remote-three/branch-one")
+               ("some-workspace/project-three-two" "remote-three/branch-two")))
   "The basic testing environment used for all treebund tests."
-  (let ((origin (expand-file-name "origin-one.git" treebund-remote--dir)))
+  (let ((origin (expand-file-name "remote-one.git" treebund-remote--dir)))
     (should (file-directory-p origin))
     (should-not (treebund--branches origin)))
 
-  (let ((origin (expand-file-name "origin-two.git" treebund-remote--dir)))
+  (let ((origin (expand-file-name "remote-two.git" treebund-remote--dir)))
     (should (file-directory-p origin))
     (should (length= (treebund--branches origin) 1))
     (should (member "branch-one" (treebund--branches origin))))
 
-  (let ((origin (expand-file-name "origin-three.git" treebund-remote--dir)))
+  (let ((origin (expand-file-name "remote-three.git" treebund-remote--dir)))
     (should (file-directory-p origin))
     (should (length= (treebund--branches origin) 2))
     (should (member "branch-one" (treebund--branches origin)))
-    (should (member "branch-two" (treebund--branches origin)))))
+    (should (member "branch-two" (treebund--branches origin))))
+
+  (let* ((workspace (file-name-concat treebund-workspace-root "some-workspace"))
+         (project-two-one (file-name-concat workspace "project-two-one"))
+         (project-three-one (file-name-concat workspace "project-three-one"))
+         (project-three-two (file-name-concat workspace "project-three-two")))
+    (should (file-directory-p workspace))
+    (should (file-directory-p project-two-one))
+    (should (file-directory-p project-three-one))
+    (should (file-directory-p project-three-two))))
 
 (treebund-deftest treebund--branches
-  (("remote" . ("test/branches" "test/branches-two"))
-   ("empty-remote" . ()))
+  (:remotes (("remote" . ("test/branches" "test/branches-two"))
+             ("empty-remote" . ())))
   (let* ((workspace-path (expand-file-name "branches" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
@@ -144,7 +180,7 @@ are used for all tests."
     (should (length= (treebund--branches bare-path) 0))))
 
 (treebund-deftest treebund--worktree-bare
-  (("remote" . ("test/worktree-bare")))
+  (:remotes (("remote" . ("test/worktree-bare"))))
   (let* ((workspace-path (expand-file-name "worktree-bare" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote))
@@ -152,7 +188,7 @@ are used for all tests."
     (should (string= bare-path (treebund--worktree-bare project-path)))))
 
 (treebund-deftest treebund--worktree-remove
-  (("remote" . ("test/worktree-remove")))
+  (:remotes (("remote" . ("test/worktree-remove"))))
   (let* ((workspace-path (expand-file-name "worktree-remove" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote))
@@ -161,7 +197,7 @@ are used for all tests."
     (should-not (file-exists-p project-path))))
 
 (treebund-deftest treebund--worktree-add
-  (("remote" . ("test/worktree-add")))
+  (:remotes (("remote" . ("test/worktree-add"))))
   (let* ((workspace-path (expand-file-name "worktree-add" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote))
@@ -169,7 +205,7 @@ are used for all tests."
     (should (file-directory-p project-path))))
 
 (treebund-deftest treebund--branch
-  (("remote" . ("test/branch")))
+  (:remotes (("remote" . ("test/branch"))))
   (let* ((workspace-path (expand-file-name "branch" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote))
@@ -177,7 +213,7 @@ are used for all tests."
     (should (string= "test/branch" (treebund--branch project-path)))))
 
 (treebund-deftest treebund--branch-delete
-  (("remote" . ("master" "branch-one" "branch-two")))
+  (:remotes (("remote" . ("master" "branch-one" "branch-two"))))
   (let* ((workspace-path (expand-file-name "branch-delete" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote))
@@ -189,7 +225,7 @@ are used for all tests."
     (should (length= (treebund--branches bare-path) 2))))
 
 (treebund-deftest treebund--clone
-  (("remote" . ("master" "other-branch")))
+  (:remotes (("remote" . ("master" "other-branch"))))
   (let* ((workspace-path (expand-file-name "branch-delete" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
@@ -199,7 +235,7 @@ are used for all tests."
     (should (member "other-branch" (treebund--branches bare-path)))))
 
 (treebund-deftest treebund--worktree-list
-  (("remote" . ("master")))
+  (:remotes (("remote" . ("master"))))
   (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
     (should (length= (treebund--worktree-list bare-path) 1))
@@ -217,13 +253,13 @@ are used for all tests."
       (should (length= (treebund--worktree-list worktree) 3)))))
 
 (treebund-deftest treebund--rev-count
-  (("remote" . ("master" "other-branch")))
+  (:remotes (("remote" . ("master" "other-branch"))))
   (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
     (should (= (treebund--rev-count bare-path "other-branch") 3))))
 
 (treebund-deftest treebund--repo-worktree-count
-  (("remote" . ("master")))
+  (:remotes (("remote" . ("master"))))
   (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
     (should (= (treebund--repo-worktree-count bare-path) 0))
@@ -238,7 +274,7 @@ are used for all tests."
       (should (= (treebund--repo-worktree-count bare-path) 2)))))
 
 (treebund-deftest treebund--has-worktrees-p
-  (("remote" . ("master")))
+  (:remotes (("remote" . ("master"))))
   (let* ((remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
     (should-not (treebund--has-worktrees-p bare-path))
@@ -268,7 +304,7 @@ are used for all tests."
 ;;       (should-not (treebund--unpushed-commits-p project-path)))))
 
 (treebund-deftest treebund--bare-name
-  (("remote" . ("master")))
+  (:remotes (("remote" . ("master"))))
   (let* ((workspace-path (expand-file-name "bare-name" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote))
@@ -277,7 +313,7 @@ are used for all tests."
     (should (string= "remote" (treebund--bare-name project-path)))))
 
 (treebund-deftest treebund--bare-delete
-  (("remote" . ("master")))
+  (:remotes (("remote" . ("master"))))
   (let* ((workspace-path (expand-file-name "bare-name" treebund-workspace-root))
          (remote (expand-file-name "remote.git" treebund-remote--dir))
          (bare-path (treebund--clone remote)))
@@ -295,5 +331,22 @@ are used for all tests."
                             (treebund-delete-bare "/tmp/treebund-tests/workspaces/something")
                             :type 'treebund-error))))))
 
+(treebund-deftest treebund-current-workspace
+  ( :remotes (("remote" . ("master")))
+    :projects (("some-workspace/some-project" "remote/master")))
+  (make-directory (file-name-concat treebund-workspace-root "test-project"))
+  (with-temp-buffer
+    (let ((buffer-file-name (expand-file-name "../" treebund-workspace-root)))
+      (should-not (treebund-current-workspace)))
+    (let ((buffer-file-name treebund-workspace-root))
+      (should-not (treebund-current-workspace)))
+    (let ((buffer-file-name (file-name-concat treebund-workspace-root "some-workspace")))
+      (should (string= (file-name-concat treebund-test--dir "workspaces/some-workspace/")
+                       (treebund-current-workspace))))
+    (let ((buffer-file-name (file-name-concat treebund-workspace-root "some-workspace/some-project")))
+      (should (string= (file-name-concat treebund-test--dir "workspaces/some-workspace/")
+                       (treebund-current-workspace))))))
+
 (provide 'treebund-tests)
+
 ;;; treebund-tests.el ends here
